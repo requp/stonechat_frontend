@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Chat</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #chat-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .message {
+            margin-bottom: 10px;
+        }
+        .join-message { color: green; }
+        .leave-message { color: red; }
+        .error-message { color: orange; }
+        .user-message { color: blue; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Group Chat</h2>
+        <div id="chat-container" class="mb-3">
+            <!-- Messages will be appended here -->
+        </div>
+        <div class="input-group">
+            <input type="text" id="message-input" class="form-control" placeholder="Type your message..." autocomplete="off">
+            <button id="send-button" class="btn btn-primary">Send</button>
+        </div>
+        <div id="error-message" class="text-danger mt-2"></div>
+    </div>
+
+    <script>
+        // JWT-токен (замените на реальный токен, полученный после авторизации)
+        const token = "{{ token }}"; // Передается через Jinja2
+        const wsUrl = `ws://requp.ru:8000/api/v1/chat/simple_group_chat/ws?token={{ token }}`;
+
+        const ws = new WebSocket(wsUrl);
+        const chatContainer = document.getElementById('chat-container');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const errorMessage = document.getElementById('error-message');
+
+        ws.onopen = () => {
+            console.log('Connected to WebSocket');
+            appendMessage('System', 'Connected to chat', 'text-muted');
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            let messageClass = 'user-message';
+            let sender = data.sender ? data.sender.username : 'System';
+
+            switch (data.type) {
+                case 'join':
+                    messageClass = 'join-message';
+                    break;
+                case 'leave':
+                    messageClass = 'leave-message';
+                    break;
+                case 'error':
+                    messageClass = 'error-message';
+                    break;
+                default:
+                    messageClass = 'user-message';
+            }
+
+            appendMessage(sender, data.content, messageClass);
+        };
+
+        ws.onclose = (event) => {
+            console.log('Disconnected:', event.code, event.reason);
+            appendMessage('System', `Disconnected: ${event.reason || 'Unknown reason'}`, 'text-danger');
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            appendMessage('System', 'WebSocket error occurred', 'text-danger');
+        };
+
+        function appendMessage(sender, content, className) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${className}`;
+            messageDiv.textContent = `[${sender}] ${content}`;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight; // Прокрутка вниз
+        }
+
+        sendButton.addEventListener('click', () => {
+            sendMessage();
+        });
+
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ message }));
+                messageInput.value = '';
+                errorMessage.textContent = '';
+            } else if (!message) {
+                errorMessage.textContent = 'Please enter a message';
+            } else {
+                errorMessage.textContent = 'Not connected to WebSocket';
+            }
+        }
+    </script>
+</body>
+</html>
